@@ -1,0 +1,11 @@
+// generated files from latex
+*.aux
+*.gz
+*log
+*.out
+*.fdb_latexmk
+*.fls
+
+// generated files from R
+.Rhistory
+.RData
