@@ -368,18 +368,92 @@ This invariant is non-numeric, and therefore does not have On/Off points. It is 
 % [TO FILL]
 
 % =============================================================================
+%  SECTION 4: Method updateItem()
+% =============================================================================
 \section{Method \methodname{updateItem}}
 \label{sec:updateitem}
-% =============================================================================
 
-\subsection{Chosen Strategy}
-% [TO FILL]
+\subsection{Chosen Strategy: Combinational State-Input Testing \& Boundary Analysis}
+The behavior of the \methodname{updateItem} method depends simultaneously on the current execution mode of the \classname{Delivery} object, the properties of the input parameters, and an internal history tracking counter. Therefore, the chosen test design strategy is a combinational synthesis of \textbf{State-Based Contextual Constraints} and \textbf{Equivalence Partitioning / Boundary Value Analysis (BVA)} applied to the input variables. 
 
-\subsection{State + Input Combinations}
-% [TO FILL]
+The strategy systematically checks:
+\begin{enumerate}
+    \item \textbf{Contextual Constraints:} Allowed states (\code{IN\_PREPARATION}, \code{READY\_TO\_DELIVER}) vs. forbidden states that must safely bypass execution and throw an exception.
+    \item \textbf{Input Constraints:} Item supplier compatibility, unit bounds ($1 \le Q_{item} \le 10$) , overall positive total quantity residual ($Q_{total} > 0$) , and negative input tracking for item subtraction.
+    \item \textbf{History Constraints:} Safe blocking execution after exactly 3 successful updates have transpired.
+\end{enumerate}
 
-\subsection{Test Cases}
-% [TO FILL]
+\subsection{State + Input Combinations Matrix}
+Let $U$ represent the cumulative count of successful \methodname{updateItem} operations executed on a single instance ($0 \le U \le 4$). Let $Q_{item}$ represent the requested item quantity modification, and let $Q_{final\_total}$ represent the prospective aggregated total units of all items combined in the delivery after update execution.
+
+The logical vectors governing the input domain matrix partitions are mapped below:
+
+\begin{longtable}{L{4cm} C{2cm} L{3.5cm} L{4.5cm}}
+  \toprule
+  \textbf{Variable / Context} & \textbf{Partition} & \textbf{Values / Conditions} & \textbf{Expected Outcome Category} \\
+  \midrule
+  \endfirsthead
+
+  \toprule
+  \textbf{Variable / Context} & \textbf{Partition} & \textbf{Values / Conditions} & \textbf{Expected Outcome Category} \\
+  \midrule
+  \endhead
+
+  \bottomrule
+  \endlastfoot
+
+  \multirow{2}{*}{\textbf{System Mode}} 
+    & Valid context   & \code{IN\_PREPARATION}, \code{READY\_TO\_DELIVER} & Process business rules \\
+    & Invalid context & Other FSM states & Throw \exn{InvalidInvocationException} \\
+  \midrule
+  \multirow{2}{*}{\textbf{Update Counter ($U$)}}
+    & $U < 3$         & $0, 1, 2$ updates achieved & Allowed to succeed if bounds valid  \\
+    & $U \ge 3$         & 3 updates already processed & Operation fails (returns \code{false})  \\
+  \midrule
+  \multirow{4}{*}{\textbf{Input Quantity ($Q_{item}$)}}
+    & Under Bound    & $\le 0$ (if subtraction results in total $\le 0$) & Operation fails (returns \code{false})  \\
+    & Valid Positive & $1 \le Q_{item} \le 10$ & Success; changes state if ready \\
+    & Valid Negative & $-10 \le Q_{item} \le -1$ (with total $> 0$) & Success; mode unchanged \\
+    & Over Bound     & $> 10$ & Operation fails (returns \code{false})  \\
+  \midrule
+  \multirow{2}{*}{\textbf{Total Residual ($Q_{final\_total}$)}}
+    & Valid          & $> 0$ units remaining & Success  \\
+    & Invalid        & $\le 0$ units remaining & Operation fails (returns \code{false})  \\
+\end{longtable}
+
+\subsection{Test Cases Description}
+The following specific test vectors systematically exercise the boundary combinations derived from the strategy:
+
+\begin{longtable}{c C{3.2cm} C{1.2cm} C{1.8cm} C{2cm} L{4cm}}
+  \toprule
+  \textbf{TC \#} & \textbf{Initial Mode} & \textbf{Prior $U$} & \textbf{Input $Q_{item}$} & \textbf{Expected $Q_{final\_total}$} & \textbf{Expected Outcome / Side Effect} \\
+  \midrule
+  \endfirsthead
+
+  \toprule
+  \textbf{TC \#} & \textbf{Initial Mode} & \textbf{Prior $U$} & \textbf{Input $Q_{item}$} & \textbf{Expected $Q_{final\_total}$} & \textbf{Expected Outcome / Side Effect} \\
+  \midrule
+  \endhead
+
+  \bottomrule
+  \endlastfoot
+
+  \textbf{4.3.1} & \code{IN\_PREPARATION} & 0 & 5 & Valid ($>0$) & Returns \code{true}. Mode remains \code{IN\_PREPARATION}. \\
+  \midrule
+  \textbf{4.3.2} & \code{READY\_TO\_DELIVER} & 0 & 3 & Valid ($>0$) & Returns \code{true}. Mode reverts back to \code{IN\_PREPARATION}. \\
+  \midrule
+  \textbf{4.3.3} & \code{READY\_TO\_DELIVER} & 1 & $-2$ & Valid ($>0$) & Returns \code{true}. Mode remains \code{READY\_TO\_DELIVER}. \\
+  \midrule
+  \textbf{4.3.4} & \code{IN\_PREPARATION} & 0 & 11 & Valid ($>0$) & Returns \code{false}. Bound violated ($Q_{item} > 10$). State unchanged. \\
+  \midrule
+  \textbf{4.3.5} & \code{IN\_PREPARATION} & 2 & $-5$ & Invalid ($\le 0$) & Returns \code{false}. Total residual unit breakdown ($\le 0$). State unchanged. \\
+  \midrule
+  \textbf{4.3.6} & \code{READY\_TO\_DELIVER} & 3 & 2 & Valid ($>0$) & Returns \code{false}. Saturation limit met ($U=3$). State unchanged. \\
+  \midrule
+  \textbf{4.3.7} & \code{IN\_TRANSIT} & 0 & 4 & Valid ($>0$) & Throws \exn{InvalidInvocationException}. State unchanged. \\
+  \midrule
+  \textbf{4.3.8} & \code{CANCELLED} & 0 & 1 & Valid ($>0$) & Throws \exn{InvalidInvocationException}. State unchanged. \\
+\end{longtable}
 
 % =============================================================================
 \section{Implementation in TestNG}
