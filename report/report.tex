@@ -6,7 +6,7 @@
 \usepackage[utf8]{inputenc}      % UTF-8 source encoding
 \usepackage[T1]{fontenc}         % 8-bit font encoding (correct hyphenation)
 \usepackage{lmodern}             % Latin Modern scalable fonts
-\usepackage[portuguese]{babel}   % Portuguese hyphenation & typography
+\usepackage[english]{babel}   % Portuguese hyphenation & typography
 \usepackage{csquotes}            % Context-sensitive quotation marks (best practice)
 
 % =============================================================================
@@ -152,7 +152,7 @@
   Artur Krystopchuk (ist104145) \and
   Gabriel Santos (ist1116334)%
 }
-\date{June 2026}
+\date{5 June 2026}
 
 % =============================================================================
 \begin{document}
@@ -343,15 +343,166 @@ This invariant is non-numeric, and therefore does not have On/Off points. It is 
   \label{fig:delivery-fsm}
 \end{figure}
 
-\subsection{Valid and Invalid Transitions}
-% [TO FILL]
-\textit{Transition table to be filled.}
+\subsection{Transition tree}
+\label{sec:delivery-tree}
 
-\subsection{Strategy: \emph{Round-Trip / Transition Coverage}}
-% [TO FILL]
+The transition tree is obtained by unfolding the state machine breadth-first from the initial state, stopping the expansion whenever a state has already appeared on the path from the root (\emph{round-trip} criterion). Each path from the root to a leaf corresponds to one test case.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        grow=right,
+        level distance=2.6cm,
+        level 1/.style={sibling distance=1.2cm},
+        level 2/.style={sibling distance=0.7cm},
+        level 3/.style={sibling distance=0.5cm},
+        every node/.style={draw, rounded corners=2pt, font=\scriptsize\sffamily,
+                           inner sep=2pt, fill=blue!5},
+        edge from parent/.style={draw, -{Stealth}},
+        edge from parent path={(\tikzparentnode.east) -- ++(0.4,0) |- (\tikzchildnode.west)},
+    ]
+    \node {IN\_PREP}
+        child { node {IN\_PREP} edge from parent node[above,draw=none,fill=none,font=\tiny]{updateItem} }
+        child { node {IN\_PREP} edge from parent node[above,draw=none,fill=none,font=\tiny]{changeAddr} }
+        child { node {CANCELLED} edge from parent node[above,draw=none,fill=none,font=\tiny]{cancel} }
+        child { node {READY}
+            child { node {READY} edge from parent node[above,draw=none,fill=none,font=\tiny]{changeAddr} }
+            child { node {READY} edge from parent node[above,draw=none,fill=none,font=\tiny]{updateItem[F]} }
+            child { node {IN\_PREP} edge from parent node[above,draw=none,fill=none,font=\tiny]{updateItem[T,q$>$0]} }
+            child { node {CANCELLED} edge from parent node[above,draw=none,fill=none,font=\tiny]{cancel} }
+            child { node {IN\_TRANSIT}
+                child { node {DELIVERED} edge from parent node[above,draw=none,fill=none,font=\tiny]{delivered} }
+                child { node {NOT\_DEL}
+                    child { node {READY} edge from parent node[above,draw=none,fill=none,font=\tiny]{setReady} }
+                    edge from parent node[above,draw=none,fill=none,font=\tiny]{cancel[$<$3]}
+                }
+                child { node {CANCELLED} edge from parent node[above,draw=none,fill=none,font=\tiny]{cancel[$\ge$3]} }
+                edge from parent node[above,draw=none,fill=none,font=\tiny]{assign}
+            }
+            edge from parent node[above,draw=none,fill=none,font=\tiny]{setReady}
+        };
+    \end{tikzpicture}
+    \caption{Transition tree of the \classname{Delivery} class.}
+    \label{fig:delivery-tree}
+\end{figure}
+
+\noindent The paths from the root to the leaves yield $14$ test cases for valid transitions (Table~\ref{tab:delivery-paths}).
+
+\begin{longtable}{c L{8cm} L{3cm}}
+\caption{Test paths derived from the transition tree.}
+\label{tab:delivery-paths}\\
+\toprule
+\textbf{TC} & \textbf{Event sequence} & \textbf{Final state} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{TC} & \textbf{Event sequence} & \textbf{Final state} \\
+\midrule
+\endhead
+1  & new                                                       & IN\_PREPARATION \\
+2  & new $\to$ updateItem                                      & IN\_PREPARATION \\
+3  & new $\to$ changeAddress                                   & IN\_PREPARATION \\
+4  & new $\to$ cancel                                          & CANCELLED \\
+5  & new $\to$ setReady                                        & READY\_TO\_DELIVER \\
+6  & new $\to$ setReady $\to$ cancel                           & CANCELLED \\
+7  & new $\to$ setReady $\to$ changeAddress                    & READY\_TO\_DELIVER \\
+8  & new $\to$ setReady $\to$ updateItem [false]               & READY\_TO\_DELIVER \\
+9  & new $\to$ setReady $\to$ updateItem [true, qty$>$0]       & IN\_PREPARATION \\
+10 & new $\to$ setReady $\to$ assign                           & IN\_TRANSIT \\
+11 & new $\to$ setReady $\to$ assign $\to$ delivered           & DELIVERED \\
+12 & new $\to$ setReady $\to$ assign $\to$ cancel [att$<$3]    & NOT\_DELIVERED \\
+13 & new $\to$ setReady $\to$ assign $\to$ cancel [att$\ge$3]  & CANCELLED \\
+14 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ setReady & READY\_TO\_DELIVER \\
+\bottomrule
+\end{longtable}
+
+\subsection{Testing strategy: Modal Class Testing}
+\label{sec:delivery-strategy}
+
+Unlike the \classname{Order} class, the \classname{Delivery} class has an explicit \emph{state machine}: its behaviour depends on the mode the delivery is in (\code{IN\_PREPARATION}, \code{READY\_TO\_DELIVER}, \code{IN\_TRANSIT}, \code{DELIVERED}, \code{NOT\_DELIVERED}, \code{CANCELLED}), and each method is valid only in a subset of these modes. The class exhibits two kinds of constraint:
+\begin{itemize}
+    \item \textbf{Sequence constraints} --- the validity of a method invocation depends on the sequence of prior events (for example, \methodname{assign} is only valid after \methodname{setReady} has been called, which is captured by the current mode);
+    \item \textbf{Domain constraints} --- the validity (or outcome) of a method depends on the current content of the object (for example, \methodname{assign} additionally requires the courier to have fewer than $5$ deliveries assigned; \methodname{cancel} from \code{IN\_TRANSIT} branches on the number of delivery attempts; \methodname{updateItem} from \code{READY\_TO\_DELIVER} returns to \code{IN\_PREPARATION} only if the resulting quantity is positive).
+\end{itemize}
+
+\noindent The coexistence of these two kinds of constraint is the defining feature of a \emph{modal} class, and the appropriate strategy is \textbf{Modal Class Testing}.
 
 \subsection{Test Cases}
-% [TO FILL]
+\label{sec:delivery-tests}
+
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{c L{7.5cm} L{2.5cm} c}
+\caption{Final test suite for the \classname{Delivery} class.}
+\label{tab:delivery-suite}\\
+\toprule
+\textbf{TC} & \textbf{Event sequence} & \textbf{Final state} & \textbf{Exception?} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{TC} & \textbf{Event sequence} & \textbf{Final state} & \textbf{Exception?} \\
+\midrule
+\endhead
+\multicolumn{4}{l}{\textit{Valid transitions (from the transition tree)}} \\
+\midrule
+1  & new                                                                & in\_preparation    & No \\
+2  & new $\to$ updateItem                                               & in\_preparation    & No \\
+3  & new $\to$ changeAddress                                            & in\_preparation    & No \\
+4  & new $\to$ cancel                                                   & cancelled         & No \\
+5  & new $\to$ setReady                                                 & ready\_to\_deliver & No \\
+6  & new $\to$ setReady $\to$ cancel                                    & cancelled         & No \\
+7  & new $\to$ setReady $\to$ changeAddress                             & ready\_to\_deliver & No \\
+8  & new $\to$ setReady $\to$ updateItem [false]                        & ready\_to\_deliver & No \\
+9  & new $\to$ setReady $\to$ updateItem [true, qty$>$0]                & in\_preparation    & No \\
+10 & new $\to$ setReady $\to$ assign                                    & in\_transit        & No \\
+11 & new $\to$ setReady $\to$ assign $\to$ delivered                    & delivered          & No \\
+12 & new $\to$ setReady $\to$ assign $\to$ cancel [att$<$3]             & not\_delivered     & No \\
+13 & new $\to$ setReady $\to$ assign $\to$ cancel [att$\ge$3]           & cancelled          & No \\
+14 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ setReady & ready\_to\_deliver & No \\
+\midrule
+\multicolumn{4}{l}{\textit{Invalid invocations from \code{IN\_PREPARATION}}} \\
+\midrule
+15 & new $\to$ assign                                                   & in\_preparation    & Yes \\
+16 & new $\to$ delivered                                                & in\_preparation    & Yes \\
+\midrule
+\multicolumn{4}{l}{\textit{Invalid invocations from \code{READY\_TO\_DELIVER}}} \\
+\midrule
+17 & new $\to$ setReady $\to$ setReady                                  & ready\_to\_deliver & Yes \\
+18 & new $\to$ setReady $\to$ delivered                                 & ready\_to\_deliver & Yes \\
+\midrule
+\multicolumn{4}{l}{\textit{Invalid invocations from \code{IN\_TRANSIT}}} \\
+\midrule
+19 & new $\to$ setReady $\to$ assign $\to$ setReady                     & in\_transit       & Yes \\
+20 & new $\to$ setReady $\to$ assign $\to$ assign                       & in\_transit        & Yes \\
+21 & new $\to$ setReady $\to$ assign $\to$ changeAddress                & in\_transit        & Yes \\
+22 & new $\to$ setReady $\to$ assign $\to$ updateItem                   & in\_transit        & Yes \\
+\midrule
+\multicolumn{4}{l}{\textit{Invalid invocations from \code{NOT\_DELIVERED}}} \\
+\midrule
+23 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ assign        & not\_delivered & Yes \\
+24 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ delivered     & not\_delivered & Yes \\
+25 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ cancel        & not\_delivered & Yes \\
+26 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ changeAddress & not\_delivered & Yes \\
+27 & new $\to$ setReady $\to$ assign $\to$ cancel [$<$3] $\to$ updateItem    & not\_delivered & Yes \\
+\midrule
+\multicolumn{4}{l}{\textit{Invalid invocations from \code{DELIVERED} (terminal)}} \\
+\midrule
+28 & new $\to$ setReady $\to$ assign $\to$ delivered $\to$ setReady      & delivered & Yes \\
+29 & new $\to$ setReady $\to$ assign $\to$ delivered $\to$ assign        & delivered & Yes \\
+30 & new $\to$ setReady $\to$ assign $\to$ delivered $\to$ delivered     & delivered & Yes \\
+31 & new $\to$ setReady $\to$ assign $\to$ delivered $\to$ cancel        & delivered & Yes \\
+32 & new $\to$ setReady $\to$ assign $\to$ delivered $\to$ changeAddress & delivered & Yes \\
+33 & new $\to$ setReady $\to$ assign $\to$ delivered $\to$ updateItem    & delivered & Yes \\
+\midrule
+\multicolumn{4}{l}{\textit{Invalid invocations from \code{CANCELLED} (terminal)}} \\
+\midrule
+34 & new $\to$ cancel $\to$ setReady                                    & cancelled & Yes \\
+35 & new $\to$ cancel $\to$ assign                                      & cancelled & Yes \\
+36 & new $\to$ cancel $\to$ delivered                                   & cancelled & Yes \\
+37 & new $\to$ cancel $\to$ cancel                                      & cancelled & Yes \\
+38 & new $\to$ cancel $\to$ changeAddress                               & cancelled & Yes \\
+39 & new $\to$ cancel $\to$ updateItem                                  & cancelled & Yes \\
+\bottomrule
+\end{longtable}
 
 % =============================================================================
 \section{Method \methodname{computeDeliveryCost}}
