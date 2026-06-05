@@ -6,7 +6,7 @@
 \usepackage[utf8]{inputenc}      % UTF-8 source encoding
 \usepackage[T1]{fontenc}         % 8-bit font encoding (correct hyphenation)
 \usepackage{lmodern}             % Latin Modern scalable fonts
-\usepackage[english]{babel}   % Portuguese hyphenation & typography
+\usepackage[english]{babel}
 \usepackage{csquotes}            % Context-sensitive quotation marks (best practice)
 
 % =============================================================================
@@ -44,6 +44,8 @@
 \usepackage{longtable}  % Tables that span multiple pages
 \usepackage{tabularx}   % Auto-width X columns
 \usepackage{multirow}   % Cells spanning multiple rows
+\usepackage{tabularray}
+\UseTblrLibrary{booktabs}
 
 % Convenience column types with explicit alignment
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
@@ -54,7 +56,9 @@
 % =============================================================================
 \usepackage{eurosym}   % \euro
 \usepackage{pifont}    % Dingbats: \ding{55} = ✗,  \ding{51} = ✓
+\usepackage{siunitx}
 
+\DeclareSIUnit{\euro}{\text{\euro}}
 % =============================================================================
 %  7. CODE LISTINGS
 % =============================================================================
@@ -98,6 +102,7 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{automata, positioning, arrows.meta, shapes.geometric, calc}
+\usepackage{forest}
 
 % =============================================================================
 %  9. HYPERLINKS & CROSS-REFERENCING (Must be last)
@@ -509,14 +514,796 @@ Unlike the \classname{Order} class, the \classname{Delivery} class has an explic
 \label{sec:cdc}
 % =============================================================================
 
-\subsection{Strategy: Decision Table / Boundary Analysis}
-% [TO FILL]
+\subsection{Chosen Strategy: Combinational Function Testing}
 
-\subsection{Decision Table}
-% [TO FILL]
+The selected method-scope strategy is \textbf{Combinational Function Testing}. This is the most appropriate
+strategy because the method implements a business rule equivalent to a decision table: combinations of
+predicates over the \classname{Order} state select one of several possible delivery fees. Domain Analysis is
+then applied inside each variant to choose On and Off boundary points systematically.
+
+\subsection{Decision Tree and Decision Table}
+
+The analysis use the concrete units from the provided interfaces: delivery distance is in metres, order cost
+is in cents, total quantity is counted in item units, and total weight is in grams. The expected delivery
+cost remains in euros, as specified for \methodname{computeDeliveryCost}.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\textwidth}{!}{
+  \begin{forest}
+    for tree={
+      draw,
+      rounded corners,
+      node options={align=center},
+      parent anchor=south,
+      child anchor=north,
+      grow=south,
+      l sep=15mm,
+      s sep=5mm,
+      edge={draw, thick},
+      anchor=north
+    }
+    [$\text{computeDeliveryCost}()$
+      [$\text{Delivery distance} < 5$
+        [$\text{Order cost} < 75$
+          [$\text{Num. units} \le 10$
+            [$\text{3 euros}$]
+          ]
+          [$\text{Num. units} > 10$
+            [$\text{5 euros}$]
+          ]
+        ]
+        [$\text{Order cost} \ge 75$
+          [$\text{0 euros}$]
+        ]
+      ]
+      [$5 \le \text{Delivery distance} \le 15$
+        [$\text{Order cost} < 75$
+          [$\text{Num. units} \le 5$
+            [$\text{4 euros}$]
+          ]
+          [$\text{Num. units} > 5$
+            [$\text{6 euros}$]
+            ]
+        ]
+        [$75 \le \text{Order cost} \le 150$
+          [$\text{3 euros}$]
+        ]
+        [$\text{Order cost} > 150$
+          [$\text{1 euro}$]
+          ]
+      ]
+      [$15 < \text{Delivery distance} \le 20$
+        [$\text{Order cost} < 300$
+          [$\text{Total weight} < 3$
+            [$\text{7 euros}$]
+          ]
+          [$\text{Total weight} \ge 3$
+            [$\text{Num. units} < 8$
+              [$\text{8 euros}$]
+            ]
+            [$\text{Num. units} \ge 8$
+              [$\text{10 euros}$]
+            ]
+          ]
+        ]
+        [$300 \le \text{Order cost} \le 500$
+          [$\text{Total weight} < 5$
+            [$\text{3 euros}$]
+          s]
+          [$\text{Total weight} \ge 5$
+            [$\text{5 euros}$]
+          ]
+        ]
+        [$\text{Order cost} > 500$
+          [$\text{1 euro}$]
+        ]
+      ]
+    ]
+  \end{forest}%
+  }
+  \caption{Decision tree for computing delivery costs based on distance, cost, and units.}
+  \label{fig:delivery_cost}
+\end{figure}
+
+\small
+\begin{longtblr}[
+  caption = {Decision table for \methodname{computeDeliveryCost}.},
+  label = {tbl:decision_delivery_cost} % Optional: if you need to reference it
+]{
+  colspec = {c l c},
+  rows = {m},
+  rowhead = 1, % This repeats the top \toprule and headers on new pages
+}
+  \toprule
+  \textbf{Variant} & \textbf{Condition} & \textbf{Expected delivery cost} \\
+  \midrule
+  Variant 1  & {$\text{Delivery distance} < 5000 \land$ \\
+                $\text{Order cost} < 7500 \land$ \\
+                $\text{Num. units} \le 10$} & \qty{3}{\euro} \\
+  \addlinespace
+  Variant 2  & {$\text{Delivery distance} < 5000 \land$ \\
+                $\text{Order cost} < 7500 \land$ \\
+                $\text{Num. units} > 10$} & \qty{5}{\euro} \\
+  \addlinespace
+  Variant 3  & {$\text{Delivery distance} < 5000 \land$ \\
+                $\text{Order cost} \ge 7500$} & \qty{0}{\euro} \\
+  \addlinespace
+  Variant 4  & {$5000 \le \text{Delivery distance} \le 15000 \land$ \\
+                $\text{Order cost} < 7500 \land$ \\
+                $\text{Num. units} \le 5$} & \qty{4}{\euro} \\
+  \addlinespace
+  Variant 5  & {$5000 \le \text{Delivery distance} \le 15000 \land$ \\
+                $\text{Order cost} < 7500 \land$ \\
+                $\text{Num. units} > 5$} & \qty{6}{\euro} \\
+  \addlinespace
+  Variant 6  & {$5000 \le \text{Delivery distance} \le 15000 \land$ \\
+                $7500 \le \text{Order cost} \le 15000$} & \qty{3}{\euro} \\
+  \addlinespace
+  Variant 7  & {$5000 \le \text{Delivery distance} \le 15000 \land$ \\
+                $\text{Order cost} > 15000$} & \qty{1}{\euro} \\
+  \addlinespace
+  Variant 8  & {$15000 < \text{Delivery distance} \le 20000 \land$ \\
+                $\text{Order cost} < 30000 \land$ \\
+                $\text{Total weight} < 3000$} & \qty{7}{\euro} \\
+  \addlinespace
+  Variant 9  & {$15000 < \text{Delivery distance} \le 20000 \land$ \\
+                $\text{Order cost} < 30000 \land$ \\
+                $\text{Total weight} \ge 3000 \land$ \\
+                $\text{Num. units} < 8$} & \qty{8}{\euro} \\
+  \addlinespace
+  Variant 10 & {$15000 < \text{Delivery distance} \le 20000 \land$ \\
+                $\text{Order cost} < 30000 \land$ \\
+                $\text{Total weight} \ge 3000 \land$ \\
+                $\text{Num. units} \ge 8$} & \qty{10}{\euro} \\
+  \addlinespace
+  Variant 11 & {$15000 < \text{Delivery distance} \le 20000 \land$ \\
+                $30000 \le \text{Order cost} \le 50000 \land$ \\
+                $\text{Total weight} < 5000$} & \qty{3}{\euro} \\
+  \addlinespace
+  Variant 12 & {$15000 < \text{Delivery distance} \le 20000 \land$ \\
+                $30000 \le \text{Order cost} \le 50000 \land$ \\
+                $\text{Total weight} \ge 5000$} & \qty{5}{\euro} \\
+  \addlinespace
+  Variant 13 & {$15000 < \text{Delivery distance} \le 20000 \land$ \\
+                $\text{Order cost} > 50000$} & \qty{1}{\euro} \\
+  \bottomrule
+\end{longtblr}
+\normalsize % Reset text size back to normal after the table
+
+\subsection{Domain Matrices}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 1 Constraints:
+      \protect\(
+        \begin{aligned}
+          & \text{Delivery distance} < 5000 \;\land\; \\
+          & \text{Order cost} < 7500 \;\land\; \\
+          & \text{Num. units} \le 10
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_1},
+  ]{
+    colspec = {l l c c c c c c c},
+  }
+    \toprule
+    \textbf{V1} & \SetCell[c=2]{c} & & \textbf{-} & \textbf{1} & \textbf{-} & \textbf{2} & \textbf{3} & \textbf{-} \\
+    \midrule
+    \SetCell[r=3]{l} dist & \SetCell[r=2]{l} $< 5000$ & ON  & 5000 &       &       &       &       &       \\
+                          &                           & OFF &       & 4999 &       &       &       &       \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN       &     &       &       & 2001 & 2002 & 2501 & 2502 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $< 7500$ & ON  &       &       & 7500 &       &       &       \\
+                          &                           & OFF &       &       &       & 7499 &       &       \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN       &     & 3001 & 3002 &       &       & 3501 & 3502 \\
+    \midrule
+    \SetCell[r=3]{l} units& \SetCell[r=2]{l} $\le 10$ & ON  &       &       &       &       & 10   &       \\
+                          &                           & OFF &       &       &       &       &       & 11   \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN       &     & 2    & 3    & 4    & 5    &       &       \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN       &     & 1001 & 1002 & 1101 & 1102 & 1201 & 1202 \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &    & \hyperref[tab:variant_4]{V4}   & 3 & \hyperref[tab:variant_3]{V3} & 3 & 3 & \hyperref[tab:variant_2]{V2} \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 2 Constraints:
+      \protect\(
+        \begin{aligned}
+          & \text{Delivery distance} < 5000 \;\land\; \\
+          & \text{Order cost} < 7500 \;\land\; \\
+          & \text{Num. units} > 10
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_2},
+  ]{
+    colspec = {l l c c c c c c c},
+  }
+    \toprule
+    \textbf{V2} & \SetCell[c=2]{c} & & \textbf{-} & \textbf{4} & \textbf{-} & \textbf{5} & \textbf{-} & \textbf{6} \\
+    \midrule
+    \SetCell[r=3]{l} dist & \SetCell[r=2]{l} $< 5000$ & ON  & 5000 &       &       &       &       &       \\
+                          &                           & OFF &       & 4999 &       &       &       &       \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN       &     &       &       & 2101 & 2102 & 2601 & 2602 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $< 7500$ & ON  &       &       & 7500 &       &       &       \\
+                          &                           & OFF &       &       &       & 7499 &       &       \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN       &     & 3101 & 3102 &       &       & 3601 & 3602 \\
+    \midrule
+    \SetCell[r=3]{l} units& \SetCell[r=2]{l} $> 10$   & ON  &       &       &       &       & 10   &       \\
+                          &                           & OFF &       &       &       &       &       & 11   \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN       &     & 12   & 13   & 14   & 15   &       &       \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN       &     & 1301 & 1302 & 1401 & 1402 & 1501 & 1502 \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &    & \hyperref[tab:variant_5]{V5}   & 5 & \hyperref[tab:variant_3]{V3} & 5 & \hyperref[tab:variant_1]{V1} & 5 \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Variant 3 Constraints:
+    \protect\(
+      \begin{aligned}
+        & \text{Delivery distance} < 5000 \;\land\; \\
+        & \text{Order cost} \ge 7500
+      \end{aligned}
+    \protect\)
+  }
+  \label{tab:variant_3}
+  \begin{tblr}{
+    colspec = {l l c c c c c},
+  }
+    \toprule
+    \textbf{V3} & \SetCell[c=2]{c} & & \textbf{-} & \textbf{7} & \textbf{8} & \textbf{-} \\
+    \midrule
+    \SetCell[r=3]{l} dist & \SetCell[r=2]{l} $< 5000$   & ON  & 5000 &       &       &       \\
+                          &                             & OFF &       & 4999 &       &       \\ \cmidrule{2-7}
+                          & \SetCell[c=2]{c} IN         &     &       &       & 2201 & 2202 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $\ge 7500$ & ON  &       &       & 7500 &       \\
+                          &                             & OFF &       &       &       & 7499 \\ \cmidrule{2-7}
+                          & \SetCell[c=2]{c} IN         &     & 10001 & 10002 &       &       \\
+    \midrule
+    units                 & \SetCell[c=2]{c} IN         &     & 2    & 3     & 4    & 5    \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN         &     & 1601 & 1602  & 1701 & 1702 \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &      & \hyperref[tab:variant_6]{V6}   & 0 & 0 & \hyperref[tab:variant_1]{V1} \\
+    \bottomrule
+  \end{tblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 4 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 5000 \le \text{Delivery distance} \le 15000 \;\land\; \\
+          & \text{Order cost} < 7500 \;\land\; \\
+          & \text{Num. units} \le 5
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_4},
+  ]{
+    colspec = {l l c c c c c c c c c},
+  }
+    \toprule
+    \textbf{V4} & \SetCell[c=2]{c} & & \textbf{9} & \textbf{-} & \textbf{10} & \textbf{-} & \textbf{-} & \textbf{11} & \textbf{12} & \textbf{-} \\
+    \midrule
+    \SetCell[r=5]{l} dist & \SetCell[r=2]{l} $\ge 5000$ & ON  & 5000 &       &       &       &       &       &       &       \\
+                          &                             & OFF &       & 4999 &       &       &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[r=2]{l} $\le 15000$& ON  &       &       & 15000 &       &       &       &       &       \\
+                          &                             & OFF &       &       &       & 15001 &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN         &     &       &       &       &       & 8001 & 8002 & 8501 & 8502 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $< 7500$    & ON  &       &       &       &       & 7500 &       &       &       \\
+                          &                             & OFF &       &       &       &       &       & 7499 &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN         &     & 3201 & 3202 & 3301  & 3302  &       &       & 3401 & 3402 \\
+    \midrule
+    \SetCell[r=3]{l} units& \SetCell[r=2]{l} $\le 5$     & ON  &       &       &       &       &       &       & 5    &       \\
+                          &                             & OFF &       &       &       &       &       &       &       & 6    \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN         &     & 1    & 2    & 3     & 4     & 1    & 2    &       &       \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN         &     & 1001 & 1002 & 1101  & 1102  & 1201 & 1202 & 1301 & 1302 \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &      & 4 & \hyperref[tab:variant_1]{V1} & 4 & \hyperref[tab:variant_8]{V8} & \hyperref[tab:variant_6]{V6} & 4 & 4 & \hyperref[tab:variant_5]{V5} \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 5 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 5000 \le \text{Delivery distance} \le 15000 \;\land\; \\
+          & \text{Order cost} < 7500 \;\land\; \\
+          & \text{Num. units} > 5
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_5},
+  ]{
+    colspec = {l l c c c c c c c c c},
+  }
+    \toprule
+    \textbf{V5} & \SetCell[c=2]{c} & & \textbf{13} & \textbf{-} & \textbf{14} & \textbf{-} & \textbf{-} & \textbf{15} & \textbf{-} & \textbf{16} \\
+    \midrule
+    \SetCell[r=5]{l} dist & \SetCell[r=2]{l} $\ge 5000$  & ON  & 5000 &       &       &       &       &       &       &       \\
+                          &                              & OFF &       & 4999 &       &       &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[r=2]{l} $\le 15000$ & ON  &       &       & 15000 &       &       &       &       &       \\
+                          &                              & OFF &       &       &       & 15001 &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN          &     &       &       &       &       & 9001 & 9002 & 9501 & 9502 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $< 7500$     & ON  &       &       &       &       & 7500 &       &       &       \\
+                          &                              & OFF &       &       &       &       &       & 7499 &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN          &     & 3251 & 3252 & 3351  & 3352  &       &       & 3451 & 3452 \\
+    \midrule
+    \SetCell[r=3]{l} units& \SetCell[r=2]{l} $> 5$        & ON  &       &       &       &       &       &       & 5    &       \\
+                          &                              & OFF &       &       &       &       &       &       &       & 6    \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN          &     & 7    & 8    & 9     & 10    & 11   & 12   &       &       \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN          &     & 1401 & 1402 & 1501  & 1502  & 1601 & 1602 & 1701 & 1702 \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &       & 6 & \hyperref[tab:variant_1]{V1} & 6 & \hyperref[tab:variant_8]{V8} & \hyperref[tab:variant_6]{V6} & 6 & \hyperref[tab:variant_4]{V4} & 6 \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 6 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 5000 \le \text{Delivery distance} \le 15000 \;\land\; \\
+          & 7500 \le \text{Order cost} \le 15000
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_6},
+  ]{
+      colspec = {l l c c c c c c c c c},
+  }
+    \toprule
+    \textbf{V6} & \SetCell[c=2]{c} & & \textbf{17} & \textbf{-} & \textbf{18} & \textbf{-} & \textbf{19} & \textbf{-} & \textbf{20} & \textbf{-} \\
+    \midrule
+    \SetCell[r=5]{l} dist & \SetCell[r=2]{l} $\ge 5000$  & ON  & 5000 &       &       &       &       &       &       &       \\
+                          &                              & OFF &       & 4999 &       &       &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[r=2]{l} $\le 15000$ & ON  &       &       & 15000 &       &       &       &       &       \\
+                          &                              & OFF &       &       &       & 15001 &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN          &     &       &       &       &       & 10001 & 10002 & 10501 & 10502 \\
+    \midrule
+    \SetCell[r=5]{l} cost & \SetCell[r=2]{l} $\ge 7500$  & ON  &       &       &       &       & 7500  &       &       &       \\
+                          &                              & OFF &       &       &       &       &       & 7499  &       &       \\ \cmidrule{2-11}
+                          & \SetCell[r=2]{l} $\le 15000$ & ON  &       &       &       &       &       &       & 15000 &       \\
+                          &                              & OFF &       &       &       &       &       &       &       & 15001 \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN          &     & 11001 & 11002 & 11501 & 11502 &       &       &       &       \\
+    \midrule
+    units                 & \SetCell[c=2]{c} IN          &     & 2    & 3    & 4    & 5    & 2    & 3    & 4    & 5    \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN          &     & 1001 & 1002 & 1101 & 1102 & 1201 & 1202 & 1301 & 1302 \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & & & 3 & \hyperref[tab:variant_3]{V3} & 3 & \hyperref[tab:variant_8]{V8} & 3 & \hyperref[tab:variant_4]{V4} & 3 & \hyperref[tab:variant_7]{V7} \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 7 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 5000 \le \text{Delivery distance} \le 15000 \;\land\; \\
+          & \text{Order cost} > 15000
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_7},
+  ]{
+    colspec = {l l c c c c c c c},
+  }
+    \toprule
+    \textbf{V7} & \SetCell[c=2]{c} & & \textbf{21} & \textbf{-} & \textbf{22} & \textbf{-} & \textbf{-} & \textbf{23} \\
+    \midrule
+    \SetCell[r=5]{l} dist & \SetCell[r=2]{l} $\ge 5000$ & ON  & 5000 &       &       &       &       &       \\
+                          &                             & OFF &       & 4999 &       &       &       &       \\ \cmidrule{2-9}
+                          & \SetCell[r=2]{l} $\le 15000$& ON  &       &       & 15000 &       &       &       \\
+                          &                             & OFF &       &       &       & 15001 &       &       \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN         &     &       &       &       &       & 12001 & 12002 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $> 15000$  & ON  &       &       &       &       & 15000 &       \\
+                          &                             & OFF &       &       &       &       &       & 15001 \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN         &     & 20001& 20002& 25001 & 25002 &       &       \\
+    \midrule
+    units                 & \SetCell[c=2]{c} IN         &     & 2    & 3    & 4    & 5    & 6    & 7    \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN         &     & 1001 & 1002 & 1101  & 1102  & 1201  & 1202  \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &      & 1 & \hyperref[tab:variant_3]{V3} & 1 & \hyperref[tab:variant_8]{V8} & \hyperref[tab:variant_6]{V6} & 1 \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{talltblr}[
+    caption = {Variant 8 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 15000 < \text{Delivery distance} \le 20000 \;\land\; \\
+          & \text{Order cost} < 30000 \;\land\; \\
+          & \text{Total weight} < 3000
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_8},
+    note{a} = {InvalidOperationException}
+  ]{
+    width = \linewidth,
+    % 1. Set default for ALL columns: Expand to fit (co=1), centered (c), middle-aligned (m)
+    columns = {co=1, halign=c, valign=m},
+    % 2. Override the first two columns: Do not expand (co=0), left-aligned (l)
+    column{1,2} = {co=0, halign=l},
+    row{1} = {font=\bfseries},
+  }
+    \toprule
+    V8 & \SetCell[c=2]{c} & & - & 24 & 25 & 26 & - & 27 & - & 28 \\
+    \midrule
+    \SetCell[r=5]{l} dist & \SetCell[r=2]{l} $> 15000$  & ON  & 15000 &       &       &       &       &       &       &       \\
+                          &                             & OFF &       & 15001 &       &       &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[r=2]{l} $\le 20000$& ON  &       &       & 20000 &       &       &       &       &       \\
+                          &                             & OFF &       &       &       & 20001 &       &       &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN         &     &       &       &       &       & 17001 & 17002 & 17501 & 17502 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $< 30000$  & ON  &       &       &       &       & 30000 &       &       &       \\
+                          &                             & OFF &       &       &       &       &       & 29999 &       &       \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN         &     & 14001 & 14002 & 14501 & 14502 &       &       & 14801 & 14802 \\
+    \midrule
+    \SetCell[r=3]{l} weight & \SetCell[r=2]{l} $< 3000$ & ON  &       &       &       &       &       &       & 3000  &       \\
+                          &                             & OFF &       &       &       &       &       &       &       & 2999  \\ \cmidrule{2-11}
+                          & \SetCell[c=2]{c} IN         &     & 1001  & 1002  & 1501  & 1502  & 2001  & 2002  &       &       \\
+    \midrule
+    units                     & \SetCell[c=2]{c} IN         &     & 2     & 3     & 4     & 5     & 6     & 7     & 2     & 3     \\
+    \midrule
+  \SetCell[c=3]{l} Expected results (\euro) & & &
+      \hyperref[tab:variant_6]{V6} & 7 & 7 &
+      IOE\TblrNote{a} & \hyperref[tab:variant_11]{V11} & 7 &
+      \hyperref[tab:variant_9]{V9} & 7 \\
+  \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{talltblr}[
+    caption = {Variant 9 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 15000 < \text{Delivery distance} \le 20000 \;\land\; \\
+          & \text{Order cost} < 30000 \;\land\; \\
+          & \text{Total weight} \ge 3000 \;\land\; \\
+          & \text{Num.\ units} < 8
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_9},
+  ]{
+    width   = \linewidth,
+    % l l c   = left natural-width columns for row-header, sub-condition, ON/OFF
+    % *{10}{X[c,m]} = 10 evenly distributed, centered, middle-aligned expanding columns
+    colspec = {l l c *{10}{X[c,m]}},
+    colsep  = 4pt,              % Reduce cell padding from default 6pt to reclaim space
+    row{1}  = {font=\bfseries}, % Bold header row (tabularray-idiomatic)
+  }
+    \toprule
+    V9 & \SetCell[c=2]{c} & & - & 29 & 30 & - & - & 31 & 32 & - & - & 33 \\
+    \midrule
+    \SetCell[r=5]{l} dist   & \SetCell[r=2]{l} $> 15000$    & ON  & 15000 &       &       &       &       &       &       &       &       &       \\
+                            &                                & OFF &       & 15001 &       &       &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[r=2]{l} $\le 20000$  & ON  &       &       & 20000 &       &       &       &       &       &       &       \\
+                            &                                & OFF &       &       &       & 20001 &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     &       &       &       &       & 18001 & 18002 & 18501 & 18502 & 19001 & 19002 \\
+    \midrule
+    \SetCell[r=3]{l} cost   & \SetCell[r=2]{l} $< 30000$    & ON  &       &       &       &       & 30000 &       &       &       &       &       \\
+                            &                                & OFF &       &       &       &       &       & 29999 &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 14001 & 14002 & 14501 & 14502 &       &       & 14801 & 14802 & 14901 & 14902 \\
+    \midrule
+    \SetCell[r=3]{l} weight & \SetCell[r=2]{l} $\ge 3000$   & ON  &       &       &       &       &       &       & 3000  &       &       &       \\
+                            &                                & OFF &       &       &       &       &       &       &       & 2999  &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 4001  & 4002  & 4101  & 4102  & 4201  & 4202  &       &       & 4301  & 4302  \\
+    \midrule
+    \SetCell[r=3]{l} units  & \SetCell[r=2]{l} < 8         & ON  &       &       &       &       &       &       &       &       & 8     &       \\
+                            &                                & OFF &       &       &       &       &       &       &       &       &       & 7     \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 2     & 3     & 4     & 5     & 6     & 7     & 2     & 3     &       &       \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & & &
+      \hyperref[tab:variant_6]{V6}  & 8 & 8 &
+      \hyperref[tab:variant_8]{V8}  & \hyperref[tab:variant_11]{V11} & 8 & 8 &
+      \hyperref[tab:variant_8]{V8}  & \hyperref[tab:variant_10]{V10} & 8 \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{talltblr}[
+    caption = {Variant 10 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 15000 < \text{Delivery distance} \le 20000 \;\land\; \\
+          & \text{Order cost} < 30000 \;\land\; \\
+          & \text{Total weight} \ge 3000 \;\land\; \\
+          & \text{Num.\ units} \ge 8
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_10},
+  ]{
+    width   = \linewidth,
+    % l l c   = left natural-width columns for row-header, sub-condition, ON/OFF
+    % *{10}{X[c,m]} = 10 evenly distributed, centered, middle-aligned expanding columns
+    colspec = {l l c *{10}{X[c,m]}},
+    colsep  = 4pt,              % Reduce cell padding from default 6pt to reclaim space
+    row{1}  = {font=\bfseries}, % Bold header row (tabularray-idiomatic)
+  }
+    \toprule
+    V10 & \SetCell[c=2]{c} & & - & 34 & 35 & - & - & 36 & 37 & - & 38 & - \\
+    \midrule
+    \SetCell[r=5]{l} dist   & \SetCell[r=2]{l} $> 15000$    & ON  & 15000 &       &       &       &       &       &       &       &       &       \\
+                            &                                & OFF &       & 15001 &       &       &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[r=2]{l} $\le 20000$  & ON  &       &       & 20000 &       &       &       &       &       &       &       \\
+                            &                                & OFF &       &       &       & 20001 &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     &       &       &       &       & 18001 & 18002 & 18501 & 18502 & 19001 & 19002 \\
+    \midrule
+    \SetCell[r=3]{l} cost   & \SetCell[r=2]{l} $< 30000$    & ON  &       &       &       &       & 30000 &       &       &       &       &       \\
+                            &                                & OFF &       &       &       &       &       & 29999 &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 14001 & 14002 & 14501 & 14502 &       &       & 14801 & 14802 & 14901 & 14902 \\
+    \midrule
+    \SetCell[r=3]{l} weight & \SetCell[r=2]{l} $\ge 3000$   & ON  &       &       &       &       &       &       & 3000  &       &       &       \\
+                            &                                & OFF &       &       &       &       &       &       &       & 2999  &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 4001  & 4002  & 4101  & 4102  & 4201  & 4202  &       &       & 4301  & 4302  \\
+    \midrule
+    \SetCell[r=3]{l} units  & \SetCell[r=2]{l} $\ge 8$      & ON  &       &       &       &       &       &       &       &       & 8     &       \\
+                            &                                & OFF &       &       &       &       &       &       &       &       &       & 7     \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 10    & 11    & 12    & 13    & 14    & 15    & 16    & 17    &       &       \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & & &
+      \hyperref[tab:variant_6]{V6}  & 10 & 10 &
+      \hyperref[tab:variant_8]{V8}  & \hyperref[tab:variant_11]{V11} & 10 & 10 &
+      \hyperref[tab:variant_8]{V8}  & 10 & \hyperref[tab:variant_9]{V9} \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{talltblr}[
+    caption = {Variant 11 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 15000 < \text{Delivery distance} \le 20000 \;\land\; \\
+          & 30000 \le \text{Order cost} \le 50000 \;\land\; \\
+          & \text{Total weight} < 5000
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_11},
+  ]{
+    width   = \linewidth,
+    % l l c   = left natural-width columns for row-header, sub-condition, ON/OFF
+    % *{10}{X[c,m]} = 10 evenly distributed, centered, middle-aligned expanding columns
+    colspec = {l l c *{10}{X[c,m]}},
+    colsep  = 4pt,              % Reduce cell padding from default 6pt to reclaim space
+    row{1}  = {font=\bfseries}, % Bold header row (tabularray-idiomatic)
+  }
+    \toprule
+    V11 & \SetCell[c=2]{c} & & - & 39 & 40 & - & 41 & - & 42 & - & - & 43 \\
+    \midrule
+    \SetCell[r=5]{l} dist   & \SetCell[r=2]{l} $> 15000$    & ON  & 15000 &       &       &       &       &       &       &       &       &       \\
+                            &                                & OFF &       & 15001 &       &       &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[r=2]{l} $\le 20000$  & ON  &       &       & 20000 &       &       &       &       &       &       &       \\
+                            &                                & OFF &       &       &       & 20001 &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     &       &       &       &       & 18001 & 18002 & 18501 & 18502 & 19001 & 19002 \\
+    \midrule
+    \SetCell[r=5]{l} cost   & \SetCell[r=2]{l} $\ge 30000$  & ON  &       &       &       &       & 30000 &       &       &       &       &       \\
+                            &                                & OFF &       &       &       &       &       & 29999 &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[r=2]{l} $\le 50000$  & ON  &       &       &       &       &       &       & 50000 &       &       &       \\
+                            &                                & OFF &       &       &       &       &       &       &       & 50001 &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 40001 & 40002 & 41001 & 41002 &       &       &       &       & 42001 & 42002 \\
+    \midrule
+    \SetCell[r=3]{l} weight & \SetCell[r=2]{l} $<$ 5000      & ON  &       &       &       &       &       &       &       &       & 5000  &       \\
+                            &                                & OFF &       &       &       &       &       &       &       &       &       & 4999  \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 2001  & 2002  & 2101  & 2102  & 2201  & 2202  & 2301  & 2302  &       &       \\
+    \midrule
+    units                   & \SetCell[c=2]{c} IN            &     & 2     & 3     & 4     & 5     & 6     & 7     & 8     & 9     & 10    & 11    \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & & &
+      \hyperref[tab:variant_7]{V7}  & 3 & 3 &
+      \hyperref[tab:variant_8]{V8}  & 3 &
+      \hyperref[tab:variant_8]{V8}  & 3 &
+      \hyperref[tab:variant_13]{V13} & \hyperref[tab:variant_12]{V12} & 3 \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{talltblr}[
+    caption = {Variant 12 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 15000 < \text{Delivery distance} \le 20000 \;\land\; \\
+          & 30000 \le \text{Order cost} \le 50000 \;\land\; \\
+          & \text{Total weight} \ge 5000
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_12},
+  ]{
+    width   = \linewidth,
+    % l l c   = left natural-width columns for row-header, sub-condition, ON/OFF
+    % *{10}{X[c,m]} = 10 evenly distributed, centered, middle-aligned expanding columns
+    colspec = {l l c *{10}{X[c,m]}},
+    colsep  = 4pt,              % Reduce cell padding from default 6pt to reclaim space
+    row{1}  = {font=\bfseries}, % Bold header row (tabularray-idiomatic)
+  }
+    \toprule
+    V12 & \SetCell[c=2]{c} & & - & 44 & 45 & - & 46 & - & 47 & - & 48 & - \\
+    \midrule
+    \SetCell[r=5]{l} dist   & \SetCell[r=2]{l} $> 15000$    & ON  & 15000 &       &       &       &       &       &       &       &       &       \\
+                            &                                & OFF &       & 15001 &       &       &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[r=2]{l} $\le 20000$  & ON  &       &       & 20000 &       &       &       &       &       &       &       \\
+                            &                                & OFF &       &       &       & 20001 &       &       &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     &       &       &       &       & 18001 & 18002 & 18501 & 18502 & 19001 & 19002 \\
+    \midrule
+    \SetCell[r=5]{l} cost   & \SetCell[r=2]{l} $\ge 30000$  & ON  &       &       &       &       & 30000 &       &       &       &       &       \\
+                            &                                & OFF &       &       &       &       &       & 29999 &       &       &       &       \\ \cmidrule{2-13}
+                            & \SetCell[r=2]{l} $\le 50000$  & ON  &       &       &       &       &       &       & 50000 &       &       &       \\
+                            &                                & OFF &       &       &       &       &       &       &       & 50001 &       &       \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 40001 & 40002 & 41001 & 41002 &       &       &       &       & 42001 & 42002 \\
+    \midrule
+    \SetCell[r=3]{l} weight & \SetCell[r=2]{l} $\ge 5000$   & ON  &       &       &       &       &       &       &       &       & 5000  &       \\
+                            &                                & OFF &       &       &       &       &       &       &       &       &       & 4999  \\ \cmidrule{2-13}
+                            & \SetCell[c=2]{c} IN            &     & 6001  & 6002  & 6101  & 6102  & 6201  & 6202  & 6301  & 6302  &       &       \\
+    \midrule
+    units                   & \SetCell[c=2]{c} IN            &     & 2     & 3     & 4     & 5     & 6     & 7     & 8     & 9     & 10    & 11    \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & & &
+      \hyperref[tab:variant_7]{V7}   & 5 & 5 &
+      \hyperref[tab:variant_8]{V8}   & 5 &
+      \hyperref[tab:variant_9]{V9}   & 5 &
+      \hyperref[tab:variant_13]{V13} & 5 &
+      \hyperref[tab:variant_11]{V11} \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \begin{talltblr}[
+    caption = {Variant 13 Constraints:
+      \protect\(
+        \begin{aligned}
+          & 15000 < \text{Delivery distance} \le 20000 \;\land\; \\
+          & \text{Order cost} > 50000
+        \end{aligned}
+      \protect\)
+    },
+    label = {tab:variant_13},
+  ]{
+    colspec = {l l c c c c c c c},
+  }
+    \toprule
+    \textbf{V13} & \SetCell[c=2]{c} & & \textbf{-} & \textbf{49} & \textbf{50} & \textbf{-} & \textbf{-} & \textbf{51} \\
+    \midrule
+    \SetCell[r=5]{l} dist & \SetCell[r=2]{l} $> 15000$  & ON  & 15000 &       &       &       &       &       \\
+                          &                             & OFF &       & 15001 &       &       &       &       \\ \cmidrule{2-9}
+                          & \SetCell[r=2]{l} $\le 20000$& ON  &       &       & 20000 &       &       &       \\
+                          &                             & OFF &       &       &       & 20001 &       &       \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN         &     &       &       &       &       & 18001 & 18002 \\
+    \midrule
+    \SetCell[r=3]{l} cost & \SetCell[r=2]{l} $> 50000$  & ON  &       &       &       &       & 50000 &       \\
+                          &                             & OFF &       &       &       &       &       & 50001 \\ \cmidrule{2-9}
+                          & \SetCell[c=2]{c} IN         &     & 60001 & 60002 & 65001 & 65002 &       &       \\
+    \midrule
+    weight                & \SetCell[c=2]{c} IN         &     & 2001  & 2002  & 2101  & 2102  & 2201  & 2202  \\
+    \midrule
+    units                 & \SetCell[c=2]{c} IN         &     & 2     & 3     & 4     & 5     & 6     & 7     \\
+    \midrule
+    \SetCell[c=3]{l} Expected results (\euro) & &      & \hyperref[tab:variant_7]{V7} & 1 & 1 & \hyperref[tab:variant_8]{V8} & \hyperref[tab:variant_11]{V11} & 1 \\
+    \bottomrule
+  \end{talltblr}
+\end{table}
+
+\clearpage
 
 \subsection{Test Cases}
-% [TO FILL]
+
+The final step of the Combinational Function Testing strategy is to extract the
+concrete test cases from the domain matrices. The table below lists the 28 distinct test
+cases generated from the first 8 variants.
+
+Each test case corresponds to a numbered column in the domain matrices, defining the concrete
+inputs for Delivery Distance, Order Cost, Number of Units, and Total Weight, along with the
+expected outcome (either a specific delivery cost or an expected exception when a systemic
+boundary is violated).
+
+\begin{longtblr}[
+  caption = {Concrete test cases derived from the domain matrices for \methodname{computeDeliveryCost}.},
+  label = {tab:test_cases},
+]{
+  width = \linewidth,
+  colspec = {c X[c] X[c] X[c] X[c] X[c, 1.3]},
+  rowhead = 1,
+  rows = {m},
+}
+  \toprule
+  \textbf{Test Case} & \textbf{Delivery Distance} & \textbf{Order Cost} & \textbf{Num. Units} & \textbf{Total Weight} & \textbf{Expected Result} \\
+  \midrule
+  % Variant 1
+  TC1 & 4999 & 3002 & 3 & 1002 & \qty{3}{\euro} \\
+  TC2 & 2002 & 7499 & 5 & 1102 & \qty{3}{\euro} \\
+  TC3 & 2501 & 3501 & 10 & 1201 & \qty{3}{\euro} \\
+  \addlinespace
+  % Variant 2
+  TC4 & 4999 & 3102 & 13 & 1302 & \qty{5}{\euro} \\
+  TC5 & 2102 & 7499 & 15 & 1402 & \qty{5}{\euro} \\
+  TC6 & 2602 & 3602 & 11 & 1502 & \qty{5}{\euro} \\
+  \addlinespace
+  % Variant 3
+  TC7 & 4999 & 10002 & 3 & 1602 & \qty{0}{\euro} \\
+  TC8 & 2202 & 7500 & 5 & 1702 & \qty{0}{\euro} \\
+  TC9 & 2302 & 10502 & 8 & 1802 & \qty{0}{\euro} \\
+  \addlinespace
+  % Variant 4
+  TC10 & 5000 & 3201 & 1 & 1001 & \qty{4}{\euro} \\
+  TC11 & 15000 & 7499 & 3 & 1101 & \qty{4}{\euro} \\
+  TC12 & 10001 & 3401 & 5 & 1301 & \qty{4}{\euro} \\
+  \addlinespace
+  % Variant 5
+  TC13 & 5000 & 3501 & 7 & 1401 & \qty{6}{\euro} \\
+  TC14 & 15000 & 7499 & 9 & 1501 & \qty{6}{\euro} \\
+  TC15 & 10002 & 3702 & 6 & 1702 & \qty{6}{\euro} \\
+  \addlinespace
+  % Variant 6
+  TC16 & 5000 & 7500 & 2 & 1001 & \qty{3}{\euro} \\
+  TC18 & 15000 & 11501 & 4 & 1101 & \qty{3}{\euro} \\
+  TC19 & 10001 & 7500 & 2 & 1201 & \qty{3}{\euro} \\
+  TC20 & 10501 & 15000 & 4 & 1301 & \qty{3}{\euro} \\
+  \addlinespace
+  % Variant 7
+  TC21 & 5000 & 20001 & 2 & 1001 & \qty{1}{\euro} \\
+  TC22 & 15000 & 25001 & 4 & 1101 & \qty{1}{\euro} \\
+  TC23 & 12002 & 15001 & 7 & 1202 & \qty{1}{\euro} \\
+  \addlinespace
+  % Variant 8
+  TC24 & 15001 & 14002 & 3 & 1002 & \qty{7}{\euro} \\
+  TC25 & 20000 & 14501 & 4 & 1501 & \qty{7}{\euro} \\
+  TC26 & 20001 & 14502 & 5 & 1502 & \exn{InvalidOperationException} \\
+  TC27 & 17002 & 29999 & 7 & 2002 & \qty{7}{\euro} \\
+  TC28 & 17502 & 14802 & 3 & 2999 & \qty{7}{\euro} \\
+  \bottomrule
+\end{longtblr}
 
 % =============================================================================
 %  SECTION 4: Method updateItem()
@@ -525,7 +1312,7 @@ Unlike the \classname{Order} class, the \classname{Delivery} class has an explic
 \label{sec:updateitem}
 
 \subsection{Chosen Strategy: Combinational State-Input Testing \& Boundary Analysis}
-The behavior of the \methodname{updateItem} method depends simultaneously on the current execution mode of the \classname{Delivery} object, the properties of the input parameters, and an internal history tracking counter. Therefore, the chosen test design strategy is a combinational synthesis of \textbf{State-Based Contextual Constraints} and \textbf{Equivalence Partitioning / Boundary Value Analysis (BVA)} applied to the input variables. 
+The behavior of the \methodname{updateItem} method depends simultaneously on the current execution mode of the \classname{Delivery} object, the properties of the input parameters, and an internal history tracking counter. Therefore, the chosen test design strategy is a combinational synthesis of \textbf{State-Based Contextual Constraints} and \textbf{Equivalence Partitioning / Boundary Value Analysis (BVA)} applied to the input variables.
 
 The strategy systematically checks:
 \begin{enumerate}
@@ -553,7 +1340,7 @@ The logical vectors governing the input domain matrix partitions are mapped belo
   \bottomrule
   \endlastfoot
 
-  \multirow{2}{*}{\textbf{System Mode}} 
+  \multirow{2}{*}{\textbf{System Mode}}
     & Valid context   & \code{IN\_PREPARATION}, \code{READY\_TO\_DELIVER} & Process business rules \\
     & Invalid context & Other FSM states & Throw \exn{InvalidInvocationException} \\
   \midrule

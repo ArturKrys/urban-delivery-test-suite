@@ -5,7 +5,4 @@
 *.out
 *.fdb_latexmk
 *.fls
-
-// generated files from R
-.Rhistory
-.RData
+*.toc
